@@ -30,7 +30,9 @@ Then open `http://127.0.0.1:8000`.
 ## Features
 
 - Browser game served by Flask at `http://localhost:8000`
-- Canvas renderer with PNG sprite art scaled to fit the viewport
+- 3/4 isometric renderer with a full terrain plane
+- Static checked-in 32-bit-era style PNG sprite art
+- Animated rocket projectiles with flame flicker frames
 - Per-browser game sessions
 - Optional terminal (Textual) version
 - Docker image support for easy deployment
@@ -82,7 +84,7 @@ If you want to re-export the checked-in sprite set from source definitions:
 python generate_pixel_sprites.py
 ```
 
-This writes PNGs to `static/sprites/`.
+This writes PNGs to `static/sprites/` and updates the larger, detailed isometric sprite set used by the browser renderer.
 
 ## VS Code Launch
 

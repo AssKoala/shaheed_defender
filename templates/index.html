@@ -122,12 +122,16 @@
         explosion3: "/static/sprites/explosion_3.png",
         explosion4: "/static/sprites/explosion_4.png",
         explosion5: "/static/sprites/explosion_5.png",
-        ground: "/static/sprites/ground.png",
-        missile: "/static/sprites/missile.png",
         moon: "/static/sprites/moon.png",
+        rocket1: "/static/sprites/rocket_1.png",
+        rocket2: "/static/sprites/rocket_2.png",
+        rocket3: "/static/sprites/rocket_3.png",
         tehranFar: "/static/sprites/tehran_far.png",
         tehranNear: "/static/sprites/tehran_near.png",
-        star: "/static/sprites/star.png"
+        star: "/static/sprites/star.png",
+        terrainA: "/static/sprites/terrain_grass_a.png",
+        terrainB: "/static/sprites/terrain_grass_b.png",
+        terrainRock: "/static/sprites/terrain_rock.png"
       };
 
       const sprites = {};
@@ -229,6 +233,32 @@
         ctx.fillRect(0, board.height - iso.tileW * 3.8, board.width, iso.tileW * 1.8);
       }
 
+      function terrainSpriteFor(x, y) {
+        const v = (x * 37 + y * 61) % 19;
+        if (v === 0 || v === 7) {
+          return sprites.terrainRock;
+        }
+        return v % 2 === 0 ? sprites.terrainA : sprites.terrainB;
+      }
+
+      function rocketSpriteFor(frameSeed) {
+        const frame = frameSeed % 3;
+        if (frame === 0) return sprites.rocket1;
+        if (frame === 1) return sprites.rocket2;
+        return sprites.rocket3;
+      }
+
+      function drawRotatedSprite(sprite, cx, cy, w, h, angle) {
+        if (!sprite) {
+          return;
+        }
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+        ctx.restore();
+      }
+
       function explosionSpriteForRadius(radius) {
         if (radius <= 1) return sprites.explosion1;
         if (radius === 2) return sprites.explosion2;
@@ -241,9 +271,13 @@
         const iso = resizeBoard(state);
         drawBackdrop(state, iso);
 
-        for (let x = 0; x < state.w; x += 1) {
-          const p = projectIso(x, state.h - 1, iso);
-          drawSprite(sprites.ground, p.x - iso.tileW * 0.8, p.y - iso.tileH * 0.7, iso.tileW * 1.6, iso.tileW * 1.6);
+        const terrainStartY = 4;
+        for (let y = terrainStartY; y < state.h; y += 1) {
+          for (let x = 0; x < state.w; x += 1) {
+            const p = projectIso(x, y, iso);
+            const tile = terrainSpriteFor(x, y);
+            drawSprite(tile, p.x - iso.tileW * 1.05, p.y - iso.tileW * 0.62, iso.tileW * 2.1, iso.tileW * 2.1);
+          }
         }
 
         const queue = [];
@@ -265,9 +299,21 @@
           enqueue(p.y, () => drawSprite(sprites.drone, p.x - iso.tileW * 0.9, p.y - iso.tileW * 1.15, iso.tileW * 1.8, iso.tileW * 1.8));
         }
 
-        for (const m of state.missiles) {
+        for (let i = 0; i < state.missiles.length; i += 1) {
+          const m = state.missiles[i];
           const p = projectIso(m.x, m.y, iso);
-          enqueue(p.y + 0.2, () => drawSprite(sprites.missile, p.x - iso.tileW * 0.45, p.y - iso.tileW * 1.4, iso.tileW * 0.9, iso.tileW * 1.6));
+          const angle = Math.atan2(m.dy, m.dx);
+          const rocket = rocketSpriteFor(state.ticks + i);
+          enqueue(p.y + 0.2, () =>
+            drawRotatedSprite(
+              rocket,
+              p.x,
+              p.y - iso.tileW * 0.45,
+              iso.tileW * 2.4,
+              iso.tileW * 1.2,
+              angle
+            )
+          );
         }
 
         for (const a10 of state.a10s) {

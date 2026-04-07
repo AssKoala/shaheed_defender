@@ -6,11 +6,11 @@
     <title>Shaheed Defender</title>
     <style>
       :root {
-        --bg: #050916;
-        --panel: #09122a;
-        --text: #c7e0ff;
-        --accent: #39c6ff;
-        --danger: #ff5c5c;
+        --bg: #040814;
+        --panel: #0b1328;
+        --text: #d7e7ff;
+        --accent: #78c8ff;
+        --danger: #ff7a6a;
       }
 
       * {
@@ -19,7 +19,7 @@
 
       body {
         margin: 0;
-        background: radial-gradient(circle at 20% 0%, #111f45 0%, var(--bg) 45%);
+        background: radial-gradient(circle at 20% 0%, #132449 0%, var(--bg) 42%);
         color: var(--text);
         font-family: "Consolas", "Courier New", monospace;
         min-height: 100vh;
@@ -56,8 +56,8 @@
         place-items: center;
         min-height: 360px;
         background:
-          linear-gradient(180deg, rgba(57, 86, 161, 0.18), rgba(7, 13, 31, 0) 40%),
-          radial-gradient(circle at 50% 0%, rgba(41, 86, 184, 0.18), rgba(0, 0, 0, 0) 45%),
+          linear-gradient(180deg, rgba(57, 92, 160, 0.2), rgba(6, 12, 25, 0) 36%),
+          radial-gradient(circle at 56% 6%, rgba(108, 160, 233, 0.16), rgba(0, 0, 0, 0) 36%),
           #060b18;
       }
 
@@ -123,6 +123,9 @@
         explosion5: "/static/sprites/explosion_5.png",
         ground: "/static/sprites/ground.png",
         missile: "/static/sprites/missile.png",
+        moon: "/static/sprites/moon.png",
+        tehranFar: "/static/sprites/tehran_far.png",
+        tehranNear: "/static/sprites/tehran_near.png",
         star: "/static/sprites/star.png"
       };
 
@@ -171,23 +174,13 @@
 
       function drawBackdrop(state, cellSize) {
         const skyGradient = ctx.createLinearGradient(0, 0, 0, board.height);
-        skyGradient.addColorStop(0, "#102040");
-        skyGradient.addColorStop(0.55, "#0b1430");
+        skyGradient.addColorStop(0, "#122548");
+        skyGradient.addColorStop(0.5, "#0b1430");
         skyGradient.addColorStop(1, "#050816");
         ctx.fillStyle = skyGradient;
         ctx.fillRect(0, 0, board.width, board.height);
 
-        ctx.fillStyle = "#132445";
-        for (let x = 0; x < state.w; x += 6) {
-          const height = ((x * 5) % 7) + 2;
-          ctx.fillRect(x * cellSize, board.height - (height + 2) * cellSize, 4 * cellSize, height * cellSize);
-        }
-
-        ctx.fillStyle = "#0c1931";
-        for (let x = 2; x < state.w; x += 8) {
-          const height = ((x * 3) % 9) + 3;
-          ctx.fillRect(x * cellSize, board.height - (height + 2) * cellSize, 5 * cellSize, height * cellSize);
-        }
+        drawSprite(sprites.moon, board.width * 0.72, board.height * 0.09, cellSize * 2.2, cellSize * 2.2);
 
         for (let y = 0; y < state.h - 4; y += 1) {
           for (let x = (y % 2) * 5; x < state.w; x += 11) {
@@ -196,6 +189,18 @@
             }
           }
         }
+
+        const farY = board.height - cellSize * 10;
+        const nearY = board.height - cellSize * 9;
+        for (let x = -cellSize; x < board.width + cellSize; x += cellSize * 6) {
+          drawSprite(sprites.tehranFar, x, farY, cellSize * 6, cellSize * 6);
+        }
+        for (let x = -cellSize * 0.5; x < board.width + cellSize; x += cellSize * 6) {
+          drawSprite(sprites.tehranNear, x, nearY, cellSize * 6, cellSize * 6);
+        }
+
+        ctx.fillStyle = "rgba(255, 198, 120, 0.08)";
+        ctx.fillRect(0, board.height - cellSize * 6, board.width, cellSize * 2);
       }
 
       function explosionSpriteForRadius(radius) {

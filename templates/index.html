@@ -50,14 +50,25 @@
         color: var(--accent);
       }
 
-      #board {
-        margin: 0;
+      .board-wrap {
         padding: 14px;
-        line-height: 1;
-        font-size: clamp(7px, 1.5vw, 13px);
-        white-space: pre;
-        overflow: auto;
+        display: grid;
+        place-items: center;
         min-height: 360px;
+        background:
+          linear-gradient(180deg, rgba(57, 86, 161, 0.18), rgba(7, 13, 31, 0) 40%),
+          radial-gradient(circle at 50% 0%, rgba(41, 86, 184, 0.18), rgba(0, 0, 0, 0) 45%),
+          #060b18;
+      }
+
+      #board {
+        display: block;
+        width: min(100%, 100%);
+        max-height: 72vh;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        border: 1px solid #17306d;
+        background: #040814;
       }
 
       .controls {
@@ -80,7 +91,9 @@
         <span>Ammo: <strong id="ammo">30</strong></span>
         <span class="status" id="status">Connecting...</span>
       </section>
-      <pre id="board"></pre>
+      <section class="board-wrap">
+        <canvas id="board"></canvas>
+      </section>
       <section class="controls">
         Controls: Arrow keys move | Space fires | Click to target/fire | R restarts after game over
       </section>
@@ -88,6 +101,7 @@
 
     <script>
       const board = document.getElementById("board");
+      const ctx = board.getContext("2d");
       const statusEl = document.getElementById("status");
       const scoreEl = document.getElementById("score");
       const waveEl = document.getElementById("wave");
@@ -96,64 +110,162 @@
 
       let lastState = null;
 
-      function createGrid(w, h) {
-        return Array.from({ length: h }, () => Array.from({ length: w }, () => " "));
+      const spritePaths = {
+        battery: "/static/sprites/battery.png",
+        city: "/static/sprites/city.png",
+        cityDestroyed: "/static/sprites/city_destroyed.png",
+        cursor: "/static/sprites/cursor.png",
+        drone: "/static/sprites/drone.png",
+        explosion1: "/static/sprites/explosion_1.png",
+        explosion2: "/static/sprites/explosion_2.png",
+        explosion3: "/static/sprites/explosion_3.png",
+        explosion4: "/static/sprites/explosion_4.png",
+        explosion5: "/static/sprites/explosion_5.png",
+        ground: "/static/sprites/ground.png",
+        missile: "/static/sprites/missile.png",
+        star: "/static/sprites/star.png"
+      };
+
+      const sprites = {};
+
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+          image.src = src;
+        });
       }
 
-      function put(grid, x, y, ch) {
-        if (y >= 0 && y < grid.length && x >= 0 && x < grid[0].length) {
-          grid[y][x] = ch;
-        }
-      }
-
-      function draw(state) {
-        const grid = createGrid(state.w, state.h).map((row, y) =>
-          Array.from({ length: state.w }, (_, x) => (y < state.h - 3 && ((x + y * 3) % 23 === 0) ? "." : " "))
+      async function loadSprites() {
+        const entries = await Promise.all(
+          Object.entries(spritePaths).map(async ([key, path]) => [key, await loadImage(path)])
         );
+        for (const [key, image] of entries) {
+          sprites[key] = image;
+        }
+      }
 
-        for (let x = 0; x < state.w; x += 1) {
-          put(grid, x, state.h - 1, "_");
+      function getCellSize(state) {
+        const maxWidth = Math.max(320, window.innerWidth - 72);
+        const maxHeight = Math.max(240, window.innerHeight - 220);
+        return Math.max(8, Math.floor(Math.min(maxWidth / state.w, maxHeight / state.h)));
+      }
+
+      function resizeBoard(state) {
+        const cellSize = getCellSize(state);
+        board.width = state.w * cellSize;
+        board.height = state.h * cellSize;
+        board.style.width = `${board.width}px`;
+        board.style.height = `${board.height}px`;
+        ctx.imageSmoothingEnabled = false;
+        return cellSize;
+      }
+
+      function drawSprite(sprite, x, y, width, height) {
+        if (!sprite) {
+          return;
+        }
+        ctx.drawImage(sprite, Math.round(x), Math.round(y), Math.round(width), Math.round(height));
+      }
+
+      function drawBackdrop(state, cellSize) {
+        const skyGradient = ctx.createLinearGradient(0, 0, 0, board.height);
+        skyGradient.addColorStop(0, "#102040");
+        skyGradient.addColorStop(0.55, "#0b1430");
+        skyGradient.addColorStop(1, "#050816");
+        ctx.fillStyle = skyGradient;
+        ctx.fillRect(0, 0, board.width, board.height);
+
+        ctx.fillStyle = "#132445";
+        for (let x = 0; x < state.w; x += 6) {
+          const height = ((x * 5) % 7) + 2;
+          ctx.fillRect(x * cellSize, board.height - (height + 2) * cellSize, 4 * cellSize, height * cellSize);
         }
 
-        for (const city of state.cities) {
-          if (city.alive) {
-            put(grid, city.x - 1, state.h - 2, "#");
-            put(grid, city.x, state.h - 2, "#");
-            put(grid, city.x + 1, state.h - 2, "#");
-          } else {
-            put(grid, city.x, state.h - 2, "x");
-          }
+        ctx.fillStyle = "#0c1931";
+        for (let x = 2; x < state.w; x += 8) {
+          const height = ((x * 3) % 9) + 3;
+          ctx.fillRect(x * cellSize, board.height - (height + 2) * cellSize, 5 * cellSize, height * cellSize);
         }
 
-        put(grid, state.battery_x - 1, state.battery_y, "[");
-        put(grid, state.battery_x, state.battery_y, "^");
-        put(grid, state.battery_x + 1, state.battery_y, "]");
-
-        for (const exp of state.explosions) {
-          for (let dy = -exp.r; dy <= exp.r; dy += 1) {
-            for (let dx = -exp.r; dx <= exp.r; dx += 1) {
-              if (dx * dx + dy * dy <= exp.r * exp.r) {
-                put(grid, Math.round(exp.x + dx), Math.round(exp.y + dy), "*");
-              }
+        for (let y = 0; y < state.h - 4; y += 1) {
+          for (let x = (y % 2) * 5; x < state.w; x += 11) {
+            if ((x + y * 3) % 17 === 0) {
+              drawSprite(sprites.star, x * cellSize, y * cellSize, cellSize, cellSize);
             }
           }
         }
+      }
+
+      function explosionSpriteForRadius(radius) {
+        if (radius <= 1) return sprites.explosion1;
+        if (radius === 2) return sprites.explosion2;
+        if (radius === 3) return sprites.explosion3;
+        if (radius === 4) return sprites.explosion4;
+        return sprites.explosion5;
+      }
+
+      function draw(state) {
+        const cellSize = resizeBoard(state);
+        drawBackdrop(state, cellSize);
+
+        for (let x = 0; x < state.w; x += 1) {
+          drawSprite(sprites.ground, x * cellSize, (state.h - 1) * cellSize, cellSize, cellSize);
+        }
+
+        for (const city of state.cities) {
+          const sprite = city.alive ? sprites.city : sprites.cityDestroyed;
+          drawSprite(sprite, (city.x - 1) * cellSize, (state.h - 2) * cellSize, cellSize * 3, cellSize * 2);
+        }
+
+        drawSprite(
+          sprites.battery,
+          (state.battery_x - 1) * cellSize,
+          (state.battery_y - 1) * cellSize,
+          cellSize * 3,
+          cellSize * 2
+        );
+
+        for (const exp of state.explosions) {
+          const size = Math.max(1, exp.r * 2 + 1) * cellSize;
+          drawSprite(
+            explosionSpriteForRadius(exp.r),
+            exp.x * cellSize - size / 2 + cellSize / 2,
+            exp.y * cellSize - size / 2 + cellSize / 2,
+            size,
+            size
+          );
+        }
 
         for (const d of state.drones) {
-          put(grid, Math.round(d.x), Math.round(d.y), "V");
+          drawSprite(sprites.drone, Math.round(d.x) * cellSize, Math.round(d.y) * cellSize, cellSize, cellSize);
         }
 
         for (const m of state.missiles) {
-          put(grid, Math.round(m.x), Math.round(m.y), "|");
+          drawSprite(sprites.missile, Math.round(m.x) * cellSize, Math.round(m.y) * cellSize, cellSize, cellSize);
         }
 
-        put(grid, state.cursor.x, state.cursor.y, "+");
+        drawSprite(sprites.cursor, state.cursor.x * cellSize, state.cursor.y * cellSize, cellSize, cellSize);
 
-        let out = grid.map((r) => r.join("")).join("\n");
         if (state.game_over) {
-          out += "\n\nGAME OVER - Press R to restart";
+          const panelWidth = Math.min(board.width * 0.7, cellSize * 28);
+          const panelHeight = Math.min(board.height * 0.26, cellSize * 6);
+          const panelX = (board.width - panelWidth) / 2;
+          const panelY = (board.height - panelHeight) / 2;
+          ctx.fillStyle = "rgba(6, 8, 20, 0.85)";
+          ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+          ctx.strokeStyle = "#ff5c5c";
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 5));
+          ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+          ctx.fillStyle = "#ffe5e5";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = `${Math.max(16, Math.floor(cellSize * 1.2))}px monospace`;
+          ctx.fillText("GAME OVER", board.width / 2, panelY + panelHeight * 0.42);
+          ctx.font = `${Math.max(12, Math.floor(cellSize * 0.75))}px monospace`;
+          ctx.fillText("Press R to restart", board.width / 2, panelY + panelHeight * 0.72);
         }
-        board.textContent = out;
 
         const alive = state.cities.filter((c) => c.alive).length;
         scoreEl.textContent = String(state.score);
@@ -208,16 +320,30 @@
           return;
         }
         const rect = board.getBoundingClientRect();
-        const charW = rect.width / lastState.w;
-        const charH = rect.height / (lastState.h + (lastState.game_over ? 2 : 0));
-        const x = Math.max(1, Math.min(lastState.w - 2, Math.floor((event.clientX - rect.left) / charW)));
-        const y = Math.max(1, Math.min(lastState.h - 3, Math.floor((event.clientY - rect.top) / charH)));
+        const cellW = rect.width / lastState.w;
+        const cellH = rect.height / lastState.h;
+        const x = Math.max(1, Math.min(lastState.w - 2, Math.floor((event.clientX - rect.left) / cellW)));
+        const y = Math.max(1, Math.min(lastState.h - 3, Math.floor((event.clientY - rect.top) / cellH)));
         await sendAction({ action: "click_fire", x, y });
         await tick();
       });
 
-      tick();
-      setInterval(tick, 50);
+      window.addEventListener("resize", () => {
+        if (lastState) {
+          draw(lastState);
+        }
+      });
+
+      async function start() {
+        statusEl.textContent = "Loading art...";
+        await loadSprites();
+        await tick();
+        setInterval(tick, 50);
+      }
+
+      start().catch(() => {
+        statusEl.textContent = "Failed to load art";
+      });
     </script>
   </body>
 </html>

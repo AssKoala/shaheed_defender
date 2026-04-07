@@ -2,6 +2,8 @@
 
 Browser-playable missile-defense game with an optional terminal mode.
 
+The browser version now renders with canvas-based pixel art using PNG sprite assets.
+
 ## Quick Start
 
 ### Windows (PowerShell) Quick Start
@@ -27,6 +29,7 @@ Then open `http://127.0.0.1:8000`.
 ## Features
 
 - Browser game served by Flask at `http://localhost:8000`
+- Canvas renderer with PNG sprite art scaled to fit the viewport
 - Per-browser game sessions
 - Optional terminal (Textual) version
 - Docker image support for easy deployment
@@ -69,6 +72,16 @@ python web_service.py
 Open your browser to:
 
 - `http://127.0.0.1:8000`
+
+## Regenerate Starter Sprite Art
+
+The starter browser art is generated as 64x64 PNG sprites from ASCII glyphs.
+
+```bash
+python generate_pixel_sprites.py
+```
+
+The generated files are written to `static/sprites/`.
 
 ## Run the Terminal Version (Optional)
 

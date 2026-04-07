@@ -3,24 +3,13 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, session
 
-from generate_pixel_sprites import main as generate_sprite_assets
 from game_engine import GameEngine
-
-
-def _ensure_sprite_assets() -> None:
-    sprite_dir = Path(__file__).parent / "static" / "sprites"
-    if any(sprite_dir.glob("*.png")):
-        return
-    generate_sprite_assets()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "shaheed-defender-local-dev")
-
-_ensure_sprite_assets()
 
 _sessions: dict[str, dict[str, object]] = {}
 

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 SPRITE_SIZE = 64
 BASE_SIZE = 16
 OUT_DIR = Path(__file__).parent / "static" / "sprites"
+
 
 def _blank() -> Image.Image:
     return Image.new("RGBA", (BASE_SIZE, BASE_SIZE), (0, 0, 0, 0))
@@ -16,72 +17,57 @@ def _resize(image: Image.Image) -> Image.Image:
     return image.resize((SPRITE_SIZE, SPRITE_SIZE), Image.Resampling.NEAREST)
 
 
-def render_ascii_sprite(glyph: str, fg: str) -> Image.Image:
-    font = ImageFont.load_default()
+def render_battery() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    bbox = draw.textbbox((0, 0), glyph, font=font)
-    width = bbox[2] - bbox[0]
-    height = bbox[3] - bbox[1]
-    x = (BASE_SIZE - width) // 2 - bbox[0]
-    y = (BASE_SIZE - height) // 2 - bbox[1]
-    draw.text((x, y), glyph, font=font, fill=fg)
+    draw.polygon([(2, 9), (8, 6), (14, 9), (8, 12)], fill="#3f5f7f")
+    draw.polygon([(8, 3), (10, 6), (8, 7), (6, 6)], fill="#ffd76a")
+    draw.polygon([(8, 4), (9, 6), (8, 6), (7, 6)], fill="#fff0b8")
+    draw.line((3, 10, 13, 10), fill="#2e445a")
     return _resize(image)
 
 
 def render_city() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 10, 15, 15), fill="#081223")
-    draw.rectangle((1, 9, 4, 15), fill="#213d63")
-    draw.rectangle((5, 7, 9, 15), fill="#345a87")
-    draw.rectangle((10, 8, 15, 15), fill="#27476f")
-    draw.rectangle((7, 5, 8, 7), fill="#4f7db0")
-    for x in (2, 3, 6, 7, 8, 11, 12, 13):
-        for y in (10, 12, 14):
-            draw.point((x, y), fill="#ffd776")
+    draw.polygon([(1, 11), (8, 8), (14, 11), (8, 14)], fill="#1d3556")
+    draw.polygon([(1, 11), (1, 7), (8, 4), (8, 8)], fill="#2e4f74")
+    draw.polygon([(8, 8), (8, 4), (14, 7), (14, 11)], fill="#274665")
+    draw.polygon([(6, 8), (8, 7), (10, 8), (8, 9)], fill="#3d638f")
+    for px, py in ((5, 9), (7, 8), (9, 9), (11, 10), (4, 10), (10, 11)):
+        draw.point((px, py), fill="#ffd56e")
     return _resize(image)
 
 
 def render_city_destroyed() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 11, 15, 15), fill="#160d12")
-    draw.rectangle((1, 10, 5, 15), fill="#4a2a32")
-    draw.rectangle((6, 8, 9, 15), fill="#5d3032")
-    draw.rectangle((10, 11, 15, 15), fill="#3a1e28")
-    draw.line((2, 7, 6, 11), fill="#ff8f5c", width=1)
-    draw.line((10, 7, 13, 11), fill="#ff8f5c", width=1)
-    draw.point((4, 8), fill="#ffcc66")
-    draw.point((11, 8), fill="#ffcc66")
-    return _resize(image)
-
-
-def render_battery() -> Image.Image:
-    image = _blank()
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((2, 11, 13, 15), fill="#284056")
-    draw.rectangle((4, 9, 11, 11), fill="#415f79")
-    draw.rectangle((7, 4, 9, 9), fill="#ffd34d")
-    draw.rectangle((6, 3, 10, 4), fill="#ffe38a")
+    draw.polygon([(1, 11), (8, 8), (14, 11), (8, 14)], fill="#3b242c")
+    draw.polygon([(1, 11), (1, 8), (8, 5), (8, 8)], fill="#5a3438")
+    draw.polygon([(8, 8), (8, 5), (14, 8), (14, 11)], fill="#4b2d33")
+    draw.line((4, 7, 6, 10), fill="#ff8f5c")
+    draw.line((10, 7, 12, 10), fill="#ff8f5c")
+    draw.point((5, 8), fill="#ffd571")
+    draw.point((10, 9), fill="#ffd571")
     return _resize(image)
 
 
 def render_cursor() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    color = "#6ae6ff"
-    draw.line((8, 2, 8, 13), fill=color, width=1)
-    draw.line((2, 8, 13, 8), fill=color, width=1)
-    draw.rectangle((6, 6, 10, 10), outline="#e6ffff")
+    color = "#7be8ff"
+    draw.line((8, 2, 8, 13), fill=color)
+    draw.line((2, 8, 13, 8), fill=color)
+    draw.rectangle((6, 6, 10, 10), outline="#dff9ff")
     return _resize(image)
 
 
 def render_drone() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    draw.polygon([(8, 4), (3, 8), (6, 10), (8, 9), (10, 10), (13, 8)], fill="#ff6b6b")
-    draw.point((8, 11), fill="#ffc857")
+    draw.polygon([(8, 3), (3, 8), (8, 11), (13, 8)], fill="#ff7070")
+    draw.polygon([(8, 5), (5, 8), (8, 10), (11, 8)], fill="#e35d5d")
+    draw.point((8, 12), fill="#ffd25f")
     return _resize(image)
 
 
@@ -89,28 +75,30 @@ def render_a10() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
     draw.polygon(
-        [(2, 9), (5, 8), (6, 6), (9, 6), (12, 4), (13, 5), (11, 7), (14, 8), (14, 9), (10, 9), (8, 12), (7, 12), (6, 9)],
-        fill="#c8d4e8",
+        [(1, 10), (4, 8), (6, 8), (8, 6), (11, 6), (13, 5), (14, 6), (12, 8), (15, 9), (15, 10), (11, 10), (9, 12), (7, 12), (6, 10)],
+        fill="#c4d2e5",
     )
-    draw.rectangle((4, 8, 11, 9), fill="#8aa2c2")
-    draw.point((12, 5), fill="#7dc5ff")
+    draw.line((4, 9, 12, 9), fill="#8da1be")
+    draw.point((12, 6), fill="#7fc3ff")
     return _resize(image)
 
 
 def render_missile() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    draw.rectangle((7, 3, 8, 13), fill="#ffe680")
-    draw.point((7, 2), fill="#fff6b0")
-    draw.point((8, 2), fill="#fff6b0")
+    draw.polygon([(8, 2), (9, 4), (9, 12), (7, 12), (7, 4)], fill="#ffe89c")
+    draw.polygon([(8, 1), (9, 3), (7, 3)], fill="#fff6cc")
     return _resize(image)
 
 
 def render_ground() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 12, 15, 15), fill="#203226")
-    draw.line((0, 11, 15, 11), fill="#4ca96b")
+    draw.polygon([(0, 9), (8, 5), (15, 9), (8, 13)], fill="#3a5036")
+    draw.polygon([(0, 9), (0, 10), (8, 14), (8, 13)], fill="#2d402a")
+    draw.polygon([(8, 13), (8, 14), (15, 10), (15, 9)], fill="#324b2f")
+    draw.line((1, 9, 8, 6), fill="#5e8e54")
+    draw.line((8, 6, 14, 9), fill="#5e8e54")
     return _resize(image)
 
 
@@ -146,7 +134,10 @@ def render_explosion(radius: int) -> Image.Image:
     size = 2 + radius * 2
     center = 8
     draw.ellipse((center - size, center - size, center + size, center + size), fill=colors[radius])
-    draw.ellipse((center - max(1, size // 2), center - max(1, size // 2), center + max(1, size // 2), center + max(1, size // 2)), fill="#fff5cf")
+    inner = max(1, size // 2)
+    draw.ellipse((center - inner, center - inner, center + inner, center + inner), fill="#fff5cf")
+    for px, py in ((8, 8), (6, 8), (10, 8), (8, 6), (8, 10)):
+        draw.point((px, py), fill="#fffdf0")
     return _resize(image)
 
 
@@ -179,12 +170,12 @@ def render_tehran_near() -> Image.Image:
 
 
 SPRITES = {
+    "a10": render_a10,
     "battery": render_battery,
     "city": render_city,
     "city_destroyed": render_city_destroyed,
     "cursor": render_cursor,
     "drone": render_drone,
-    "a10": render_a10,
     "explosion_1": lambda: render_explosion(1),
     "explosion_2": lambda: render_explosion(2),
     "explosion_3": lambda: render_explosion(3),

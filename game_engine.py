@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 W = 80
 H = 26
 
-BATTERY_X = W // 2
+BATTERY_X = W - 10
 BATTERY_Y = H - 2
 
 CITY_POSITIONS = [8, 18, 28, 52, 62, 72]
@@ -146,22 +146,31 @@ class GameEngine:
         if not alive:
             return
         target = random.choice(alive)
-        sx = random.uniform(4, W - 4)
+        lane = random.choice(("left", "top_left", "top_right"))
+        if lane == "left":
+            sx = random.uniform(-4.0, 2.0)
+            sy = random.uniform(3.0, H * 0.65)
+        elif lane == "top_left":
+            sx = random.uniform(2.0, W * 0.38)
+            sy = random.uniform(-4.0, 1.0)
+        else:
+            sx = random.uniform(W * 0.62, W - 2.0)
+            sy = random.uniform(-4.0, 1.0)
         spd = 0.18 + self.wave * 0.025 + random.uniform(-0.02, 0.04)
-        dist = max(1.0, ((target.x - sx) ** 2 + (H - 2) ** 2) ** 0.5)
+        tx = float(target.x)
+        ty = float(H - 2)
+        dist = max(1.0, ((tx - sx) ** 2 + (ty - sy) ** 2) ** 0.5)
         vx = (target.x - sx) / dist * spd + random.uniform(-0.03, 0.03)
-        vy = (H - 2) / dist * spd
-        self.drones.append(Drone(x=sx, y=0.0, vx=vx, vy=vy))
+        vy = (ty - sy) / dist * spd + random.uniform(-0.012, 0.012)
+        self.drones.append(Drone(x=sx, y=sy, vx=vx, vy=vy))
 
     def _spawn_a10(self) -> None:
         if self.a10s:
             return
-        left_to_right = random.choice((True, False))
-        y = random.randint(2, 6)
-        speed = random.uniform(0.45, 0.65)
-        x = -4.0 if left_to_right else W + 4.0
-        vx = speed if left_to_right else -speed
-        self.a10s.append(A10(x=x, y=float(y), vx=vx))
+        x = W + 5.0
+        y = H - random.uniform(5.2, 7.0)
+        vx = -random.uniform(0.55, 0.75)
+        self.a10s.append(A10(x=x, y=y, vx=vx))
         self.last_a10_spawn = self.ticks
 
     def _trigger_a10_strike(self) -> None:
@@ -227,6 +236,7 @@ class GameEngine:
             if not a10.alive:
                 continue
             a10.x += a10.vx
+            a10.y += -0.055
             if a10.x < -6 or a10.x > W + 6:
                 a10.alive = False
 

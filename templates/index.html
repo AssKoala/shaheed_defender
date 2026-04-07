@@ -150,20 +150,29 @@
         }
       }
 
-      function getCellSize(state) {
-        const maxWidth = Math.max(320, window.innerWidth - 72);
-        const maxHeight = Math.max(240, window.innerHeight - 220);
-        return Math.max(8, Math.floor(Math.min(maxWidth / state.w, maxHeight / state.h)));
+      function buildIsoMetrics(state) {
+        const maxWidth = Math.max(540, window.innerWidth - 88);
+        const maxHeight = Math.max(360, window.innerHeight - 240);
+        const span = state.w + state.h;
+        const tileWFromWidth = (maxWidth * 2) / (span + 9);
+        const tileWFromHeight = (maxHeight * 2) / ((span + 12) * 0.56);
+        const tileW = Math.max(10, Math.min(26, Math.floor(Math.min(tileWFromWidth, tileWFromHeight))));
+        const tileH = Math.max(6, Math.floor(tileW * 0.56));
+        const width = Math.round((span * tileW) / 2 + tileW * 10);
+        const height = Math.round((span * tileH) / 2 + tileH * 16);
+        const originX = tileW * 5;
+        const originY = tileH * 2;
+        return { tileW, tileH, width, height, originX, originY };
       }
 
       function resizeBoard(state) {
-        const cellSize = getCellSize(state);
-        board.width = state.w * cellSize;
-        board.height = state.h * cellSize;
-        board.style.width = `${board.width}px`;
-        board.style.height = `${board.height}px`;
+        const iso = buildIsoMetrics(state);
+        board.width = iso.width;
+        board.height = iso.height;
+        board.style.width = `${iso.width}px`;
+        board.style.height = `${iso.height}px`;
         ctx.imageSmoothingEnabled = false;
-        return cellSize;
+        return iso;
       }
 
       function drawSprite(sprite, x, y, width, height) {
@@ -173,7 +182,23 @@
         ctx.drawImage(sprite, Math.round(x), Math.round(y), Math.round(width), Math.round(height));
       }
 
-      function drawBackdrop(state, cellSize) {
+      function projectIso(worldX, worldY, iso) {
+        return {
+          x: iso.originX + (worldX - worldY) * (iso.tileW / 2),
+          y: iso.originY + (worldX + worldY) * (iso.tileH / 2)
+        };
+      }
+
+      function unprojectIso(screenX, screenY, iso) {
+        const dx = (screenX - iso.originX) / (iso.tileW / 2);
+        const dy = (screenY - iso.originY) / (iso.tileH / 2);
+        return {
+          x: (dx + dy) / 2,
+          y: (dy - dx) / 2
+        };
+      }
+
+      function drawBackdrop(state, iso) {
         const skyGradient = ctx.createLinearGradient(0, 0, 0, board.height);
         skyGradient.addColorStop(0, "#122548");
         skyGradient.addColorStop(0.5, "#0b1430");
@@ -181,27 +206,27 @@
         ctx.fillStyle = skyGradient;
         ctx.fillRect(0, 0, board.width, board.height);
 
-        drawSprite(sprites.moon, board.width * 0.72, board.height * 0.09, cellSize * 2.2, cellSize * 2.2);
+        drawSprite(sprites.moon, board.width * 0.72, board.height * 0.08, iso.tileW * 2.5, iso.tileW * 2.5);
 
         for (let y = 0; y < state.h - 4; y += 1) {
           for (let x = (y % 2) * 5; x < state.w; x += 11) {
             if ((x + y * 3) % 17 === 0) {
-              drawSprite(sprites.star, x * cellSize, y * cellSize, cellSize, cellSize);
+              drawSprite(sprites.star, x * iso.tileW * 0.9, y * iso.tileH * 0.9, iso.tileW, iso.tileW);
             }
           }
         }
 
-        const farY = board.height - cellSize * 10;
-        const nearY = board.height - cellSize * 9;
-        for (let x = -cellSize; x < board.width + cellSize; x += cellSize * 6) {
-          drawSprite(sprites.tehranFar, x, farY, cellSize * 6, cellSize * 6);
+        const farY = board.height - iso.tileW * 7.2;
+        const nearY = board.height - iso.tileW * 6.2;
+        for (let x = -iso.tileW; x < board.width + iso.tileW; x += iso.tileW * 6) {
+          drawSprite(sprites.tehranFar, x, farY, iso.tileW * 6, iso.tileW * 6);
         }
-        for (let x = -cellSize * 0.5; x < board.width + cellSize; x += cellSize * 6) {
-          drawSprite(sprites.tehranNear, x, nearY, cellSize * 6, cellSize * 6);
+        for (let x = -iso.tileW * 0.5; x < board.width + iso.tileW; x += iso.tileW * 6) {
+          drawSprite(sprites.tehranNear, x, nearY, iso.tileW * 6, iso.tileW * 6);
         }
 
         ctx.fillStyle = "rgba(255, 198, 120, 0.08)";
-        ctx.fillRect(0, board.height - cellSize * 6, board.width, cellSize * 2);
+        ctx.fillRect(0, board.height - iso.tileW * 3.8, board.width, iso.tileW * 1.8);
       }
 
       function explosionSpriteForRadius(radius) {
@@ -213,73 +238,75 @@
       }
 
       function draw(state) {
-        const cellSize = resizeBoard(state);
-        drawBackdrop(state, cellSize);
+        const iso = resizeBoard(state);
+        drawBackdrop(state, iso);
 
         for (let x = 0; x < state.w; x += 1) {
-          drawSprite(sprites.ground, x * cellSize, (state.h - 1) * cellSize, cellSize, cellSize);
+          const p = projectIso(x, state.h - 1, iso);
+          drawSprite(sprites.ground, p.x - iso.tileW * 0.8, p.y - iso.tileH * 0.7, iso.tileW * 1.6, iso.tileW * 1.6);
         }
+
+        const queue = [];
+        const enqueue = (depth, fn) => queue.push({ depth, fn });
 
         for (const city of state.cities) {
           const sprite = city.alive ? sprites.city : sprites.cityDestroyed;
-          drawSprite(sprite, (city.x - 1) * cellSize, (state.h - 2) * cellSize, cellSize * 3, cellSize * 2);
+          const p = projectIso(city.x, state.h - 2, iso);
+          enqueue(p.y, () => drawSprite(sprite, p.x - iso.tileW * 1.45, p.y - iso.tileW * 1.95, iso.tileW * 2.9, iso.tileW * 2.9));
         }
 
-        drawSprite(
-          sprites.battery,
-          (state.battery_x - 1) * cellSize,
-          (state.battery_y - 1) * cellSize,
-          cellSize * 3,
-          cellSize * 2
-        );
-
-        for (const exp of state.explosions) {
-          const size = Math.max(1, exp.r * 2 + 1) * cellSize;
-          drawSprite(
-            explosionSpriteForRadius(exp.r),
-            exp.x * cellSize - size / 2 + cellSize / 2,
-            exp.y * cellSize - size / 2 + cellSize / 2,
-            size,
-            size
-          );
+        {
+          const p = projectIso(state.battery_x, state.battery_y, iso);
+          enqueue(p.y + 1, () => drawSprite(sprites.battery, p.x - iso.tileW * 1.6, p.y - iso.tileW * 1.9, iso.tileW * 3.2, iso.tileW * 3.2));
         }
 
         for (const d of state.drones) {
-          drawSprite(sprites.drone, Math.round(d.x) * cellSize, Math.round(d.y) * cellSize, cellSize, cellSize);
-        }
-
-        for (const a10 of state.a10s) {
-          drawSprite(
-            sprites.a10,
-            a10.x * cellSize - cellSize,
-            a10.y * cellSize - cellSize * 0.35,
-            cellSize * 3,
-            cellSize * 2
-          );
+          const p = projectIso(d.x, d.y, iso);
+          enqueue(p.y, () => drawSprite(sprites.drone, p.x - iso.tileW * 0.9, p.y - iso.tileW * 1.15, iso.tileW * 1.8, iso.tileW * 1.8));
         }
 
         for (const m of state.missiles) {
-          drawSprite(sprites.missile, Math.round(m.x) * cellSize, Math.round(m.y) * cellSize, cellSize, cellSize);
+          const p = projectIso(m.x, m.y, iso);
+          enqueue(p.y + 0.2, () => drawSprite(sprites.missile, p.x - iso.tileW * 0.45, p.y - iso.tileW * 1.4, iso.tileW * 0.9, iso.tileW * 1.6));
         }
 
-        drawSprite(sprites.cursor, state.cursor.x * cellSize, state.cursor.y * cellSize, cellSize, cellSize);
+        for (const a10 of state.a10s) {
+          const p = projectIso(a10.x, a10.y, iso);
+          enqueue(p.y - 2, () => drawSprite(sprites.a10, p.x - iso.tileW * 2.2, p.y - iso.tileW * 2.2, iso.tileW * 4.4, iso.tileW * 2.8));
+        }
+
+        for (const exp of state.explosions) {
+          const p = projectIso(exp.x, exp.y, iso);
+          const size = Math.max(1, exp.r * 2 + 1) * iso.tileW * 0.62;
+          enqueue(p.y + 0.1, () => drawSprite(explosionSpriteForRadius(exp.r), p.x - size / 2, p.y - size / 2 - iso.tileH * 0.35, size, size));
+        }
+
+        {
+          const p = projectIso(state.cursor.x, state.cursor.y, iso);
+          enqueue(p.y + 4, () => drawSprite(sprites.cursor, p.x - iso.tileW * 0.7, p.y - iso.tileW * 1.2, iso.tileW * 1.4, iso.tileW * 1.4));
+        }
+
+        queue.sort((a, b) => a.depth - b.depth);
+        for (const item of queue) {
+          item.fn();
+        }
 
         if (state.game_over) {
-          const panelWidth = Math.min(board.width * 0.7, cellSize * 28);
-          const panelHeight = Math.min(board.height * 0.26, cellSize * 6);
+          const panelWidth = Math.min(board.width * 0.72, iso.tileW * 30);
+          const panelHeight = Math.min(board.height * 0.25, iso.tileW * 6.4);
           const panelX = (board.width - panelWidth) / 2;
           const panelY = (board.height - panelHeight) / 2;
           ctx.fillStyle = "rgba(6, 8, 20, 0.85)";
           ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
           ctx.strokeStyle = "#ff5c5c";
-          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 5));
+          ctx.lineWidth = Math.max(2, Math.floor(iso.tileW / 5));
           ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
           ctx.fillStyle = "#ffe5e5";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.font = `${Math.max(16, Math.floor(cellSize * 1.2))}px monospace`;
+          ctx.font = `${Math.max(16, Math.floor(iso.tileW * 1.05))}px monospace`;
           ctx.fillText("GAME OVER", board.width / 2, panelY + panelHeight * 0.42);
-          ctx.font = `${Math.max(12, Math.floor(cellSize * 0.75))}px monospace`;
+          ctx.font = `${Math.max(12, Math.floor(iso.tileW * 0.68))}px monospace`;
           ctx.fillText("Press R to restart", board.width / 2, panelY + panelHeight * 0.72);
         }
 
@@ -336,10 +363,12 @@
           return;
         }
         const rect = board.getBoundingClientRect();
-        const cellW = rect.width / lastState.w;
-        const cellH = rect.height / lastState.h;
-        const x = Math.max(1, Math.min(lastState.w - 2, Math.floor((event.clientX - rect.left) / cellW)));
-        const y = Math.max(1, Math.min(lastState.h - 3, Math.floor((event.clientY - rect.top) / cellH)));
+        const iso = buildIsoMetrics(lastState);
+        const sx = (event.clientX - rect.left) * (board.width / rect.width);
+        const sy = (event.clientY - rect.top) * (board.height / rect.height);
+        const world = unprojectIso(sx, sy, iso);
+        const x = Math.max(1, Math.min(lastState.w - 2, Math.floor(world.x)));
+        const y = Math.max(1, Math.min(lastState.h - 3, Math.floor(world.y)));
         await sendAction({ action: "click_fire", x, y });
         await tick();
       });

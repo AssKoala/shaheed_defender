@@ -10,5 +10,3 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .vscode/
-static/sprites/*.png
-!static/sprites/.gitkeep

@@ -20,7 +20,10 @@ def _resize(image: Image.Image) -> Image.Image:
 def render_battery() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
+    draw.polygon([(2, 10), (8, 7), (14, 10), (8, 13)], fill="#223347")
     draw.polygon([(2, 9), (8, 6), (14, 9), (8, 12)], fill="#3f5f7f")
+    draw.polygon([(2, 9), (2, 10), (8, 13), (8, 12)], fill="#2f455d")
+    draw.polygon([(8, 12), (8, 13), (14, 10), (14, 9)], fill="#354e68")
     draw.polygon([(8, 3), (10, 6), (8, 7), (6, 6)], fill="#ffd76a")
     draw.polygon([(8, 4), (9, 6), (8, 6), (7, 6)], fill="#fff0b8")
     draw.line((3, 10, 13, 10), fill="#2e445a")
@@ -30,12 +33,15 @@ def render_battery() -> Image.Image:
 def render_city() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
+    draw.polygon([(1, 12), (8, 9), (14, 12), (8, 15)], fill="#112033")
     draw.polygon([(1, 11), (8, 8), (14, 11), (8, 14)], fill="#1d3556")
     draw.polygon([(1, 11), (1, 7), (8, 4), (8, 8)], fill="#2e4f74")
     draw.polygon([(8, 8), (8, 4), (14, 7), (14, 11)], fill="#274665")
     draw.polygon([(6, 8), (8, 7), (10, 8), (8, 9)], fill="#3d638f")
     for px, py in ((5, 9), (7, 8), (9, 9), (11, 10), (4, 10), (10, 11)):
         draw.point((px, py), fill="#ffd56e")
+    draw.line((1, 11, 8, 8), fill="#5f84ae")
+    draw.line((8, 8, 14, 11), fill="#4d6f97")
     return _resize(image)
 
 
@@ -67,6 +73,7 @@ def render_drone() -> Image.Image:
     draw = ImageDraw.Draw(image)
     draw.polygon([(8, 3), (3, 8), (8, 11), (13, 8)], fill="#ff7070")
     draw.polygon([(8, 5), (5, 8), (8, 10), (11, 8)], fill="#e35d5d")
+    draw.line((4, 8, 12, 8), fill="#ffa0a0")
     draw.point((8, 12), fill="#ffd25f")
     return _resize(image)
 
@@ -80,6 +87,8 @@ def render_a10() -> Image.Image:
     )
     draw.line((4, 9, 12, 9), fill="#8da1be")
     draw.point((12, 6), fill="#7fc3ff")
+    draw.point((5, 9), fill="#e8eff8")
+    draw.point((10, 10), fill="#e8eff8")
     return _resize(image)
 
 
@@ -99,6 +108,9 @@ def render_ground() -> Image.Image:
     draw.polygon([(8, 13), (8, 14), (15, 10), (15, 9)], fill="#324b2f")
     draw.line((1, 9, 8, 6), fill="#5e8e54")
     draw.line((8, 6, 14, 9), fill="#5e8e54")
+    draw.point((8, 10), fill="#89a96f")
+    draw.point((6, 10), fill="#78975f")
+    draw.point((10, 10), fill="#78975f")
     return _resize(image)
 
 
@@ -149,6 +161,7 @@ def render_tehran_far() -> Image.Image:
     draw.polygon(points, fill="#182544")
     for x in range(0, 16, 5):
         draw.point((x + 1, 3 + (x % 2)), fill="#9cbcff")
+    draw.line((0, 10, 15, 10), fill="#1f325d")
     return _resize(image)
 
 
@@ -163,6 +176,7 @@ def render_tehran_near() -> Image.Image:
     draw.rectangle((12, 7, 15, 15), fill="#2c4d74")
     draw.rectangle((7, 1, 7, 6), fill="#8eb9ff")
     draw.rectangle((6, 6, 8, 6), fill="#8eb9ff")
+    draw.line((0, 10, 15, 10), fill="#3d6694")
     for x in (0, 1, 3, 4, 6, 7, 9, 10, 12, 13, 14):
         for y in (11, 13):
             draw.point((x, y), fill="#ffd36f")

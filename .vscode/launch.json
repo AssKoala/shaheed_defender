@@ -7,8 +7,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/web_service.py",
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "Generate sprites"
+      "cwd": "${workspaceFolder}"
     },
     {
       "name": "Shaheed Defender Terminal",
@@ -16,8 +15,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/shaheed_defender.py",
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "Generate sprites"
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

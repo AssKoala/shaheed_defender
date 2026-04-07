@@ -148,6 +148,15 @@ class GameBoard(Widget):
             # exhaust plume
             put(d.x, d.y - 1, '⁘', 'dim yellow')
 
+        # ── A-10 support aircraft ──
+        for a10 in self.engine.a10s:
+            wing_left = '╼' if a10.vx > 0 else '╾'
+            wing_right = '╾' if a10.vx > 0 else '╼'
+            put(a10.x - 1, a10.y, wing_left, 'bold bright_white')
+            put(a10.x,     a10.y, 'A', 'bold white')
+            put(a10.x + 1, a10.y, wing_right, 'bold bright_white')
+            put(a10.x, a10.y + 1, '┴', 'bright_black')
+
         # ── player missiles ──
         for m in self.engine.missiles:
             put(m.x, m.y,     '│', 'bold bright_yellow')

@@ -85,6 +85,18 @@ def render_drone() -> Image.Image:
     return _resize(image)
 
 
+def render_a10() -> Image.Image:
+    image = _blank()
+    draw = ImageDraw.Draw(image)
+    draw.polygon(
+        [(2, 9), (5, 8), (6, 6), (9, 6), (12, 4), (13, 5), (11, 7), (14, 8), (14, 9), (10, 9), (8, 12), (7, 12), (6, 9)],
+        fill="#c8d4e8",
+    )
+    draw.rectangle((4, 8, 11, 9), fill="#8aa2c2")
+    draw.point((12, 5), fill="#7dc5ff")
+    return _resize(image)
+
+
 def render_missile() -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
@@ -172,6 +184,7 @@ SPRITES = {
     "city_destroyed": render_city_destroyed,
     "cursor": render_cursor,
     "drone": render_drone,
+    "a10": render_a10,
     "explosion_1": lambda: render_explosion(1),
     "explosion_2": lambda: render_explosion(2),
     "explosion_3": lambda: render_explosion(3),

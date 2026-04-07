@@ -93,6 +93,14 @@ class City:
     alive: bool = True
 
 
+@dataclass
+class A10:
+    x: float
+    y: float
+    vx: float
+    alive: bool = True
+
+
 class GameEngine:
     def __init__(self) -> None:
         self.reset()
@@ -101,6 +109,7 @@ class GameEngine:
         self.drones: list[Drone] = []
         self.missiles: list[Missile] = []
         self.explosions: list[Explosion] = []
+        self.a10s: list[A10] = []
         self.cities: list[City] = [City(x) for x in CITY_POSITIONS]
         self.cx: int = W // 2
         self.cy: int = H // 2
@@ -110,6 +119,7 @@ class GameEngine:
         self.game_over: bool = False
         self.ticks: int = 0
         self.last_refill_wave: int = 1
+        self.last_a10_spawn: int = 0
 
     def move_cursor(self, dx: int, dy: int) -> None:
         self.cx = max(1, min(W - 2, self.cx + dx))
@@ -143,6 +153,29 @@ class GameEngine:
         vy = (H - 2) / dist * spd
         self.drones.append(Drone(x=sx, y=0.0, vx=vx, vy=vy))
 
+    def _spawn_a10(self) -> None:
+        if self.a10s:
+            return
+        left_to_right = random.choice((True, False))
+        y = random.randint(2, 6)
+        speed = random.uniform(0.45, 0.65)
+        x = -4.0 if left_to_right else W + 4.0
+        vx = speed if left_to_right else -speed
+        self.a10s.append(A10(x=x, y=float(y), vx=vx))
+        self.last_a10_spawn = self.ticks
+
+    def _trigger_a10_strike(self) -> None:
+        cleared = 0
+        for drone in self.drones:
+            if not drone.alive:
+                continue
+            drone.alive = False
+            cleared += 1
+            self.explosions.append(Explosion(x=int(drone.x), y=int(drone.y), max_r=3))
+        if cleared:
+            self.score += cleared * 10
+        self.score += 50
+
     def tick(self) -> None:
         if self.game_over:
             return
@@ -153,6 +186,10 @@ class GameEngine:
         if self.ticks % interval == 0:
             for _ in range(random.randint(1, count)):
                 self._spawn()
+
+        a10_interval = max(220, 560 - self.wave * 20)
+        if self.ticks - self.last_a10_spawn >= a10_interval:
+            self._spawn_a10()
 
         for missile in self.missiles:
             if not missile.alive:
@@ -173,12 +210,25 @@ class GameEngine:
                 if ((drone.x - explosion.x) ** 2 + (drone.y - explosion.y) ** 2) ** 0.5 <= explosion.r + 0.5:
                     drone.alive = False
                     self.score += 10
+            for a10 in self.a10s:
+                if not a10.alive:
+                    continue
+                if ((a10.x - explosion.x) ** 2 + (a10.y - explosion.y) ** 2) ** 0.5 <= explosion.r + 0.75:
+                    a10.alive = False
+                    self._trigger_a10_strike()
 
         new_wave = 1 + self.score // 150
         if new_wave > self.last_refill_wave:
             self.last_refill_wave = new_wave
             self.ammo = min(30, self.ammo + 5)
         self.wave = new_wave
+
+        for a10 in self.a10s:
+            if not a10.alive:
+                continue
+            a10.x += a10.vx
+            if a10.x < -6 or a10.x > W + 6:
+                a10.alive = False
 
         for drone in self.drones:
             if not drone.alive:
@@ -196,6 +246,7 @@ class GameEngine:
         self.drones = [o for o in self.drones if o.alive]
         self.missiles = [o for o in self.missiles if o.alive]
         self.explosions = [o for o in self.explosions if o.alive]
+        self.a10s = [o for o in self.a10s if o.alive]
 
         if not any(c.alive for c in self.cities):
             self.game_over = True
@@ -216,4 +267,5 @@ class GameEngine:
             "drones": [asdict(drone) for drone in self.drones],
             "missiles": [asdict(missile) for missile in self.missiles],
             "explosions": [asdict(explosion) for explosion in self.explosions],
+            "a10s": [asdict(a10) for a10 in self.a10s],
         }

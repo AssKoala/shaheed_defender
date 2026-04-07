@@ -111,6 +111,7 @@
       let lastState = null;
 
       const spritePaths = {
+        a10: "/static/sprites/a10.png",
         battery: "/static/sprites/battery.png",
         city: "/static/sprites/city.png",
         cityDestroyed: "/static/sprites/city_destroyed.png",
@@ -245,6 +246,16 @@
 
         for (const d of state.drones) {
           drawSprite(sprites.drone, Math.round(d.x) * cellSize, Math.round(d.y) * cellSize, cellSize, cellSize);
+        }
+
+        for (const a10 of state.a10s) {
+          drawSprite(
+            sprites.a10,
+            a10.x * cellSize - cellSize,
+            a10.y * cellSize - cellSize * 0.35,
+            cellSize * 3,
+            cellSize * 2
+          );
         }
 
         for (const m of state.missiles) {

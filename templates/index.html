@@ -6,11 +6,10 @@
     <title>Shaheed Defender</title>
     <style>
       :root {
-        --bg: #040814;
-        --panel: #0b1328;
+        --bg: #060913;
+        --panel: #0c1428;
         --text: #d7e7ff;
         --accent: #78c8ff;
-        --danger: #ff7a6a;
       }
 
       * {
@@ -19,7 +18,7 @@
 
       body {
         margin: 0;
-        background: radial-gradient(circle at 20% 0%, #132449 0%, var(--bg) 42%);
+        background: radial-gradient(circle at 18% 0%, #132449 0%, var(--bg) 44%);
         color: var(--text);
         font-family: "Consolas", "Courier New", monospace;
         min-height: 100vh;
@@ -29,7 +28,7 @@
       }
 
       .frame {
-        width: min(100%, 1000px);
+        width: min(100%, 1100px);
         background: color-mix(in oklab, var(--panel), black 10%);
         border: 1px solid #1a2d66;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
@@ -54,21 +53,24 @@
         padding: 14px;
         display: grid;
         place-items: center;
-        min-height: 360px;
+        min-height: 420px;
         background:
           linear-gradient(180deg, rgba(57, 92, 160, 0.2), rgba(6, 12, 25, 0) 36%),
           radial-gradient(circle at 56% 6%, rgba(108, 160, 233, 0.16), rgba(0, 0, 0, 0) 36%),
           #060b18;
       }
 
-      #board {
-        display: block;
+      #board3d {
         width: min(100%, 100%);
-        max-height: 72vh;
-        image-rendering: pixelated;
-        image-rendering: crisp-edges;
+        aspect-ratio: 16 / 9;
         border: 1px solid #17306d;
         background: #040814;
+      }
+
+      #board3d canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
       }
 
       .controls {
@@ -92,16 +94,17 @@
         <span class="status" id="status">Connecting...</span>
       </section>
       <section class="board-wrap">
-        <canvas id="board"></canvas>
+        <div id="board3d" aria-label="3D game board"></div>
       </section>
       <section class="controls">
-        Controls: Arrow keys move | Space fires | Click to target/fire | R restarts after game over
+        Controls: Arrow keys move | Space fires | Click terrain to target/fire | R restarts after game over
       </section>
     </main>
 
-    <script>
-      const board = document.getElementById("board");
-      const ctx = board.getContext("2d");
+    <script type="module">
+      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js";
+
+      const board3d = document.getElementById("board3d");
       const statusEl = document.getElementById("status");
       const scoreEl = document.getElementById("score");
       const waveEl = document.getElementById("wave");
@@ -110,286 +113,396 @@
 
       let lastState = null;
 
-      const spritePaths = {
-        a10: "/static/sprites/a10.png",
-        battery: "/static/sprites/battery.png",
-        city: "/static/sprites/city.png",
-        cityDestroyed: "/static/sprites/city_destroyed.png",
-        cursor: "/static/sprites/cursor.png",
-        drone: "/static/sprites/drone.png",
-        explosion1: "/static/sprites/explosion_1.png",
-        explosion2: "/static/sprites/explosion_2.png",
-        explosion3: "/static/sprites/explosion_3.png",
-        explosion4: "/static/sprites/explosion_4.png",
-        explosion5: "/static/sprites/explosion_5.png",
-        moon: "/static/sprites/moon.png",
-        rocket1: "/static/sprites/rocket_1.png",
-        rocket2: "/static/sprites/rocket_2.png",
-        rocket3: "/static/sprites/rocket_3.png",
-        tehranFar: "/static/sprites/tehran_far.png",
-        tehranNear: "/static/sprites/tehran_near.png",
-        star: "/static/sprites/star.png",
-        terrainA: "/static/sprites/terrain_grass_a.png",
-        terrainB: "/static/sprites/terrain_grass_b.png",
-        terrainRock: "/static/sprites/terrain_rock.png"
+      const stateToWorld = {
+        scale: 1.2,
+        yScale: 0.7,
+        originX: 0,
+        originZ: 0,
       };
 
-      const sprites = {};
+      function worldFromGrid(state, gx, gy) {
+        const sx = (gx - state.w / 2) * stateToWorld.scale;
+        const sz = (gy - state.h / 2) * stateToWorld.scale;
+        return new THREE.Vector3(sx, terrainHeightAt(gx, gy), sz);
+      }
 
-      function loadImage(src) {
-        return new Promise((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-          image.src = src;
+      function gridFromWorld(state, wx, wz) {
+        const gx = wx / stateToWorld.scale + state.w / 2;
+        const gy = wz / stateToWorld.scale + state.h / 2;
+        return {
+          x: Math.max(1, Math.min(state.w - 2, Math.floor(gx))),
+          y: Math.max(1, Math.min(state.h - 3, Math.floor(gy))),
+        };
+      }
+
+      function pseudoNoise(x, y) {
+        const a = Math.sin(x * 0.16 + y * 0.08) * 0.7;
+        const b = Math.cos(x * 0.09 - y * 0.14) * 0.5;
+        const c = Math.sin((x + y) * 0.05) * 0.35;
+        return a + b + c;
+      }
+
+      // Low-poly north mountain band + urban basin to evoke Tehran's terrain silhouette.
+      function terrainHeightAt(x, y) {
+        const mountainBand = Math.exp(-Math.pow((y - 4) / 4.8, 2)) * 2.8;
+        const basinSlope = (y / 26) * 0.7;
+        const ridge = Math.sin(x * 0.13 + y * 0.08) * 0.28;
+        const dunes = pseudoNoise(x, y) * 0.32;
+        return (mountainBand + basinSlope + ridge + dunes) * stateToWorld.yScale;
+      }
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color("#0a1022");
+      scene.fog = new THREE.Fog("#0a1022", 24, 96);
+
+      const camera = new THREE.PerspectiveCamera(52, 16 / 9, 0.1, 220);
+      camera.position.set(0, 23, 30);
+      camera.lookAt(0, 2, 2);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      board3d.appendChild(renderer.domElement);
+
+      const hemi = new THREE.HemisphereLight("#89a9df", "#151219", 0.62);
+      scene.add(hemi);
+
+      const moonLight = new THREE.DirectionalLight("#a3c3ff", 0.8);
+      moonLight.position.set(-18, 30, 10);
+      scene.add(moonLight);
+
+      const warmFill = new THREE.DirectionalLight("#ffd0a3", 0.3);
+      warmFill.position.set(22, 8, 18);
+      scene.add(warmFill);
+
+      const terrainGroup = new THREE.Group();
+      scene.add(terrainGroup);
+
+      const cityGroup = new THREE.Group();
+      scene.add(cityGroup);
+
+      const dynamicGroup = new THREE.Group();
+      scene.add(dynamicGroup);
+
+      const cursorGroup = new THREE.Group();
+      scene.add(cursorGroup);
+
+      let terrainMesh = null;
+      let terrainPickPlane = null;
+      let terrainBuiltFor = null;
+
+      function buildTerrain(state) {
+        while (terrainGroup.children.length) {
+          terrainGroup.remove(terrainGroup.children[0]);
+        }
+
+        const width = state.w * stateToWorld.scale;
+        const depth = state.h * stateToWorld.scale;
+        const geo = new THREE.PlaneGeometry(width, depth, state.w - 1, state.h - 1);
+        geo.rotateX(-Math.PI / 2);
+
+        const pos = geo.attributes.position;
+        const colors = [];
+
+        for (let i = 0; i < pos.count; i += 1) {
+          const vx = pos.getX(i) / stateToWorld.scale + state.w / 2;
+          const vz = pos.getZ(i) / stateToWorld.scale + state.h / 2;
+          const h = terrainHeightAt(vx, vz);
+          pos.setY(i, h);
+
+          const northness = Math.max(0, 1 - vz / state.h);
+          const urban = Math.max(0, 1 - Math.abs(vx - state.w / 2) / (state.w * 0.5));
+          const r = 0.22 + northness * 0.13 + urban * 0.03;
+          const g = 0.32 + northness * 0.14 + urban * 0.07;
+          const b = 0.2 + northness * 0.05;
+          colors.push(r, g, b);
+        }
+
+        geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        geo.computeVertexNormals();
+
+        const mat = new THREE.MeshLambertMaterial({
+          vertexColors: true,
+          flatShading: true,
         });
-      }
 
-      async function loadSprites() {
-        const entries = await Promise.all(
-          Object.entries(spritePaths).map(async ([key, path]) => [key, await loadImage(path)])
+        terrainMesh = new THREE.Mesh(geo, mat);
+        terrainGroup.add(terrainMesh);
+
+        terrainPickPlane = new THREE.Mesh(
+          new THREE.PlaneGeometry(width, depth, 1, 1),
+          new THREE.MeshBasicMaterial({ visible: false })
         );
-        for (const [key, image] of entries) {
-          sprites[key] = image;
+        terrainPickPlane.rotateX(-Math.PI / 2);
+        terrainGroup.add(terrainPickPlane);
+
+        buildTehranSkyline(state);
+      }
+
+      function buildTehranSkyline(state) {
+        const ridgeMaterial = new THREE.MeshLambertMaterial({ color: "#192644", flatShading: true });
+        const cityMaterialA = new THREE.MeshLambertMaterial({ color: "#2c4d74", flatShading: true });
+        const cityMaterialB = new THREE.MeshLambertMaterial({ color: "#24415f", flatShading: true });
+
+        const ridgeGeo = new THREE.ConeGeometry(2.8, 6.4, 4);
+        ridgeGeo.rotateY(Math.PI / 4);
+        for (let i = -14; i <= 14; i += 2) {
+          const m = new THREE.Mesh(ridgeGeo, ridgeMaterial);
+          const gx = state.w / 2 + i;
+          const gy = 3 + Math.abs((i * 13) % 5) * 0.4;
+          const p = worldFromGrid(state, gx, gy);
+          m.position.set(p.x, p.y + 3.2 + (Math.abs(i) % 3) * 0.7, p.z - 4);
+          terrainGroup.add(m);
+        }
+
+        for (let i = -18; i <= 18; i += 2) {
+          const height = 1.7 + ((i * i) % 5) * 0.25;
+          const geo = new THREE.BoxGeometry(1.2, height, 1.2);
+          const mat = (i % 3 === 0) ? cityMaterialA : cityMaterialB;
+          const b = new THREE.Mesh(geo, mat);
+          const gx = state.w / 2 + i;
+          const gy = 8 + Math.abs(i % 4);
+          const p = worldFromGrid(state, gx, gy);
+          b.position.set(p.x, p.y + height * 0.5, p.z - 7.5);
+          terrainGroup.add(b);
         }
       }
 
-      function buildIsoMetrics(state) {
-        const maxWidth = Math.max(540, window.innerWidth - 88);
-        const maxHeight = Math.max(360, window.innerHeight - 240);
-        const span = state.w + state.h;
-        const tileWFromWidth = (maxWidth * 2) / (span + 9);
-        const tileWFromHeight = (maxHeight * 2) / ((span + 12) * 0.56);
-        const tileW = Math.max(10, Math.min(26, Math.floor(Math.min(tileWFromWidth, tileWFromHeight))));
-        const tileH = Math.max(6, Math.floor(tileW * 0.56));
-        const width = Math.round((span * tileW) / 2 + tileW * 10);
-        const height = Math.round((span * tileH) / 2 + tileH * 16);
-        const originX = tileW * 5;
-        const originY = tileH * 2;
-        return { tileW, tileH, width, height, originX, originY };
-      }
-
-      function resizeBoard(state) {
-        const iso = buildIsoMetrics(state);
-        board.width = iso.width;
-        board.height = iso.height;
-        board.style.width = `${iso.width}px`;
-        board.style.height = `${iso.height}px`;
-        ctx.imageSmoothingEnabled = false;
-        return iso;
-      }
-
-      function drawSprite(sprite, x, y, width, height) {
-        if (!sprite) {
-          return;
+      function buildCityMeshes(state) {
+        while (cityGroup.children.length) {
+          cityGroup.remove(cityGroup.children[0]);
         }
-        ctx.drawImage(sprite, Math.round(x), Math.round(y), Math.round(width), Math.round(height));
-      }
-
-      function projectIso(worldX, worldY, iso) {
-        return {
-          x: iso.originX + (worldX - worldY) * (iso.tileW / 2),
-          y: iso.originY + (worldX + worldY) * (iso.tileH / 2)
-        };
-      }
-
-      function unprojectIso(screenX, screenY, iso) {
-        const dx = (screenX - iso.originX) / (iso.tileW / 2);
-        const dy = (screenY - iso.originY) / (iso.tileH / 2);
-        return {
-          x: (dx + dy) / 2,
-          y: (dy - dx) / 2
-        };
-      }
-
-      function drawBackdrop(state, iso) {
-        const skyGradient = ctx.createLinearGradient(0, 0, 0, board.height);
-        skyGradient.addColorStop(0, "#122548");
-        skyGradient.addColorStop(0.5, "#0b1430");
-        skyGradient.addColorStop(1, "#050816");
-        ctx.fillStyle = skyGradient;
-        ctx.fillRect(0, 0, board.width, board.height);
-
-        drawSprite(sprites.moon, board.width * 0.72, board.height * 0.08, iso.tileW * 2.5, iso.tileW * 2.5);
-
-        for (let y = 0; y < state.h - 4; y += 1) {
-          for (let x = (y % 2) * 5; x < state.w; x += 11) {
-            if ((x + y * 3) % 17 === 0) {
-              drawSprite(sprites.star, x * iso.tileW * 0.9, y * iso.tileH * 0.9, iso.tileW, iso.tileW);
-            }
-          }
-        }
-
-        const farY = board.height - iso.tileW * 7.2;
-        const nearY = board.height - iso.tileW * 6.2;
-        for (let x = -iso.tileW; x < board.width + iso.tileW; x += iso.tileW * 6) {
-          drawSprite(sprites.tehranFar, x, farY, iso.tileW * 6, iso.tileW * 6);
-        }
-        for (let x = -iso.tileW * 0.5; x < board.width + iso.tileW; x += iso.tileW * 6) {
-          drawSprite(sprites.tehranNear, x, nearY, iso.tileW * 6, iso.tileW * 6);
-        }
-
-        ctx.fillStyle = "rgba(255, 198, 120, 0.08)";
-        ctx.fillRect(0, board.height - iso.tileW * 3.8, board.width, iso.tileW * 1.8);
-      }
-
-      function terrainSpriteFor(x, y) {
-        const v = (x * 37 + y * 61) % 19;
-        if (v === 0 || v === 7) {
-          return sprites.terrainRock;
-        }
-        return v % 2 === 0 ? sprites.terrainA : sprites.terrainB;
-      }
-
-      function rocketSpriteFor(frameSeed) {
-        const frame = frameSeed % 3;
-        if (frame === 0) return sprites.rocket1;
-        if (frame === 1) return sprites.rocket2;
-        return sprites.rocket3;
-      }
-
-      function drawRotatedSprite(sprite, cx, cy, w, h, angle) {
-        if (!sprite) {
-          return;
-        }
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle);
-        ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
-        ctx.restore();
-      }
-
-      function explosionSpriteForRadius(radius) {
-        if (radius <= 1) return sprites.explosion1;
-        if (radius === 2) return sprites.explosion2;
-        if (radius === 3) return sprites.explosion3;
-        if (radius === 4) return sprites.explosion4;
-        return sprites.explosion5;
-      }
-
-      function draw(state) {
-        const iso = resizeBoard(state);
-        drawBackdrop(state, iso);
-
-        const terrainStartY = 4;
-        for (let y = terrainStartY; y < state.h; y += 1) {
-          for (let x = 0; x < state.w; x += 1) {
-            const p = projectIso(x, y, iso);
-            const tile = terrainSpriteFor(x, y);
-            drawSprite(tile, p.x - iso.tileW * 1.05, p.y - iso.tileW * 0.62, iso.tileW * 2.1, iso.tileW * 2.1);
-          }
-        }
-
-        const queue = [];
-        const enqueue = (depth, fn) => queue.push({ depth, fn });
 
         for (const city of state.cities) {
-          const sprite = city.alive ? sprites.city : sprites.cityDestroyed;
-          const p = projectIso(city.x, state.h - 2, iso);
-          enqueue(p.y, () => drawSprite(sprite, p.x - iso.tileW * 1.45, p.y - iso.tileW * 1.95, iso.tileW * 2.9, iso.tileW * 2.9));
+          const pos = worldFromGrid(state, city.x, state.h - 2);
+          const alive = city.alive;
+          const h = alive ? 2.4 : 1.2;
+          const geo = new THREE.BoxGeometry(2.4, h, 2.2);
+          const mat = new THREE.MeshLambertMaterial({
+            color: alive ? "#315b86" : "#4b2f33",
+            emissive: alive ? "#171b26" : "#2d0f0f",
+            flatShading: true,
+          });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(pos.x, pos.y + h * 0.5, pos.z);
+          cityGroup.add(mesh);
+
+          if (alive) {
+            const winGeo = new THREE.PlaneGeometry(1.6, 1.2);
+            const winMat = new THREE.MeshBasicMaterial({ color: "#ffd584", transparent: true, opacity: 0.45 });
+            const windows = new THREE.Mesh(winGeo, winMat);
+            windows.position.set(pos.x, pos.y + h * 0.65, pos.z + 1.11);
+            cityGroup.add(windows);
+          }
         }
 
-        {
-          const p = projectIso(state.battery_x, state.battery_y, iso);
-          enqueue(p.y + 1, () => drawSprite(sprites.battery, p.x - iso.tileW * 1.6, p.y - iso.tileW * 1.9, iso.tileW * 3.2, iso.tileW * 3.2));
+        const batteryPos = worldFromGrid(state, state.battery_x, state.battery_y);
+        const base = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.2, 1.4, 0.9, 6),
+          new THREE.MeshLambertMaterial({ color: "#3d516b", flatShading: true })
+        );
+        base.position.set(batteryPos.x, batteryPos.y + 0.45, batteryPos.z);
+        cityGroup.add(base);
+
+        const launcher = new THREE.Mesh(
+          new THREE.ConeGeometry(0.42, 1.4, 6),
+          new THREE.MeshLambertMaterial({ color: "#f4c866", emissive: "#603b0f", flatShading: true })
+        );
+        launcher.rotation.z = -0.5;
+        launcher.position.set(batteryPos.x + 0.4, batteryPos.y + 1.25, batteryPos.z + 0.2);
+        cityGroup.add(launcher);
+      }
+
+      const textureLoader = new THREE.TextureLoader();
+      const explosionTextures = [];
+
+      async function loadExplosionTextures() {
+        const paths = [
+          "/static/sprites/explosion_1.png",
+          "/static/sprites/explosion_2.png",
+          "/static/sprites/explosion_3.png",
+          "/static/sprites/explosion_4.png",
+          "/static/sprites/explosion_5.png",
+        ];
+
+        for (const path of paths) {
+          const tex = await new Promise((resolve, reject) => {
+            textureLoader.load(path, resolve, undefined, reject);
+          });
+          tex.minFilter = THREE.NearestFilter;
+          tex.magFilter = THREE.NearestFilter;
+          explosionTextures.push(tex);
+        }
+      }
+
+      function clearDynamic() {
+        while (dynamicGroup.children.length) {
+          dynamicGroup.remove(dynamicGroup.children[0]);
+        }
+        while (cursorGroup.children.length) {
+          cursorGroup.remove(cursorGroup.children[0]);
+        }
+      }
+
+      function addDrone(state, drone) {
+        const pos = worldFromGrid(state, drone.x, drone.y);
+        const geo = new THREE.OctahedronGeometry(0.55, 0);
+        const mat = new THREE.MeshLambertMaterial({ color: "#d96969", emissive: "#2c1114", flatShading: true });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(pos.x, pos.y + 2.3, pos.z);
+        dynamicGroup.add(mesh);
+      }
+
+      function addMissile(state, missile) {
+        const from = worldFromGrid(state, missile.x, missile.y);
+        const to = worldFromGrid(state, missile.x + missile.dx, missile.y + missile.dy);
+        const dir = new THREE.Vector3().subVectors(to, from).normalize();
+
+        const body = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.1, 0.1, 1.2, 6),
+          new THREE.MeshLambertMaterial({ color: "#d9dce3", flatShading: true })
+        );
+        body.position.set(from.x, from.y + 1.8, from.z);
+        body.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        dynamicGroup.add(body);
+
+        const nose = new THREE.Mesh(
+          new THREE.ConeGeometry(0.13, 0.35, 6),
+          new THREE.MeshLambertMaterial({ color: "#cc4455", flatShading: true })
+        );
+        nose.position.copy(body.position).add(dir.clone().multiplyScalar(0.72));
+        nose.quaternion.copy(body.quaternion);
+        dynamicGroup.add(nose);
+
+        const flameLen = 0.18 + ((state.ticks + Math.floor(missile.x * 5)) % 3) * 0.09;
+        const flame = new THREE.Mesh(
+          new THREE.ConeGeometry(0.08, flameLen, 5),
+          new THREE.MeshBasicMaterial({ color: "#ffb85f" })
+        );
+        flame.position.copy(body.position).add(dir.clone().multiplyScalar(-0.72));
+        flame.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
+        dynamicGroup.add(flame);
+      }
+
+      function addA10(state, a10) {
+        const p = worldFromGrid(state, a10.x, a10.y);
+        const group = new THREE.Group();
+
+        const fuselage = new THREE.Mesh(
+          new THREE.BoxGeometry(2.4, 0.32, 0.5),
+          new THREE.MeshLambertMaterial({ color: "#c7d3e3", flatShading: true })
+        );
+        group.add(fuselage);
+
+        const wings = new THREE.Mesh(
+          new THREE.BoxGeometry(1.1, 0.08, 2.2),
+          new THREE.MeshLambertMaterial({ color: "#9eb0c8", flatShading: true })
+        );
+        wings.position.set(-0.1, 0, 0);
+        group.add(wings);
+
+        const tail = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 0.32, 0.8),
+          new THREE.MeshLambertMaterial({ color: "#8fa1b7", flatShading: true })
+        );
+        tail.position.set(-1.0, 0.16, 0);
+        group.add(tail);
+
+        group.rotation.y = 0.35;
+        group.position.set(p.x, p.y + 3.8, p.z - 0.5);
+        dynamicGroup.add(group);
+      }
+
+      function addExplosion(state, exp) {
+        if (!explosionTextures.length) {
+          return;
+        }
+        const idx = Math.max(0, Math.min(4, exp.r - 1));
+        const mat = new THREE.SpriteMaterial({
+          map: explosionTextures[idx],
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const sprite = new THREE.Sprite(mat);
+
+        const p = worldFromGrid(state, exp.x, exp.y);
+        const size = Math.max(1, exp.r * 1.5);
+        sprite.position.set(p.x, p.y + 1.8 + exp.r * 0.32, p.z);
+        sprite.scale.set(size, size, 1);
+        dynamicGroup.add(sprite);
+      }
+
+      function addCursor(state) {
+        const p = worldFromGrid(state, state.cursor.x, state.cursor.y);
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(0.48, 0.055, 6, 18),
+          new THREE.MeshBasicMaterial({ color: "#7be8ff" })
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(p.x, p.y + 0.2, p.z);
+        cursorGroup.add(ring);
+      }
+
+      function syncScene(state) {
+        if (!terrainBuiltFor || terrainBuiltFor.w !== state.w || terrainBuiltFor.h !== state.h) {
+          terrainBuiltFor = { w: state.w, h: state.h };
+          buildTerrain(state);
         }
 
-        for (const d of state.drones) {
-          const p = projectIso(d.x, d.y, iso);
-          enqueue(p.y, () => drawSprite(sprites.drone, p.x - iso.tileW * 0.9, p.y - iso.tileW * 1.15, iso.tileW * 1.8, iso.tileW * 1.8));
-        }
+        buildCityMeshes(state);
+        clearDynamic();
 
-        for (let i = 0; i < state.missiles.length; i += 1) {
-          const m = state.missiles[i];
-          const p = projectIso(m.x, m.y, iso);
-          const angle = Math.atan2(m.dy, m.dx);
-          const rocket = rocketSpriteFor(state.ticks + i);
-          enqueue(p.y + 0.2, () =>
-            drawRotatedSprite(
-              rocket,
-              p.x,
-              p.y - iso.tileW * 0.45,
-              iso.tileW * 2.4,
-              iso.tileW * 1.2,
-              angle
-            )
-          );
-        }
+        for (const d of state.drones) addDrone(state, d);
+        for (const m of state.missiles) addMissile(state, m);
+        for (const a10 of state.a10s) addA10(state, a10);
+        for (const exp of state.explosions) addExplosion(state, exp);
+        addCursor(state);
+      }
 
-        for (const a10 of state.a10s) {
-          const p = projectIso(a10.x, a10.y, iso);
-          enqueue(p.y - 2, () => drawSprite(sprites.a10, p.x - iso.tileW * 2.2, p.y - iso.tileW * 2.2, iso.tileW * 4.4, iso.tileW * 2.8));
-        }
+      function resizeRenderer() {
+        const width = Math.max(320, board3d.clientWidth);
+        const height = Math.max(240, board3d.clientHeight);
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
 
-        for (const exp of state.explosions) {
-          const p = projectIso(exp.x, exp.y, iso);
-          const size = Math.max(1, exp.r * 2 + 1) * iso.tileW * 0.62;
-          enqueue(p.y + 0.1, () => drawSprite(explosionSpriteForRadius(exp.r), p.x - size / 2, p.y - size / 2 - iso.tileH * 0.35, size, size));
-        }
-
-        {
-          const p = projectIso(state.cursor.x, state.cursor.y, iso);
-          enqueue(p.y + 4, () => drawSprite(sprites.cursor, p.x - iso.tileW * 0.7, p.y - iso.tileW * 1.2, iso.tileW * 1.4, iso.tileW * 1.4));
-        }
-
-        queue.sort((a, b) => a.depth - b.depth);
-        for (const item of queue) {
-          item.fn();
-        }
-
-        if (state.game_over) {
-          const panelWidth = Math.min(board.width * 0.72, iso.tileW * 30);
-          const panelHeight = Math.min(board.height * 0.25, iso.tileW * 6.4);
-          const panelX = (board.width - panelWidth) / 2;
-          const panelY = (board.height - panelHeight) / 2;
-          ctx.fillStyle = "rgba(6, 8, 20, 0.85)";
-          ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-          ctx.strokeStyle = "#ff5c5c";
-          ctx.lineWidth = Math.max(2, Math.floor(iso.tileW / 5));
-          ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-          ctx.fillStyle = "#ffe5e5";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.font = `${Math.max(16, Math.floor(iso.tileW * 1.05))}px monospace`;
-          ctx.fillText("GAME OVER", board.width / 2, panelY + panelHeight * 0.42);
-          ctx.font = `${Math.max(12, Math.floor(iso.tileW * 0.68))}px monospace`;
-          ctx.fillText("Press R to restart", board.width / 2, panelY + panelHeight * 0.72);
-        }
-
-        const alive = state.cities.filter((c) => c.alive).length;
-        scoreEl.textContent = String(state.score);
-        waveEl.textContent = String(state.wave);
-        citiesEl.textContent = `${alive}/6`;
-        ammoEl.textContent = String(state.ammo);
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
       }
 
       async function sendAction(payload) {
         await fetch("/api/action", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
       }
 
       async function tick() {
         try {
           const resp = await fetch("/api/state", { cache: "no-store" });
-          if (!resp.ok) {
-            throw new Error("State request failed");
-          }
+          if (!resp.ok) throw new Error("State request failed");
           const state = await resp.json();
           lastState = state;
-          draw(state);
+          syncScene(state);
+
+          const alive = state.cities.filter((c) => c.alive).length;
+          scoreEl.textContent = String(state.score);
+          waveEl.textContent = String(state.wave);
+          citiesEl.textContent = `${alive}/6`;
+          ammoEl.textContent = String(state.ammo);
           statusEl.textContent = "Online";
-        } catch (err) {
+        } catch (_err) {
           statusEl.textContent = "Disconnected - retrying";
         }
       }
 
       window.addEventListener("keydown", async (event) => {
-        if (!lastState) {
-          return;
-        }
+        if (!lastState) return;
+
         if (event.key === "ArrowUp") await sendAction({ action: "move", dx: 0, dy: -1 });
         else if (event.key === "ArrowDown") await sendAction({ action: "move", dx: 0, dy: 1 });
         else if (event.key === "ArrowLeft") await sendAction({ action: "move", dx: -2, dy: 0 });
@@ -400,40 +513,43 @@
         } else {
           return;
         }
+
         event.preventDefault();
         await tick();
       });
 
-      board.addEventListener("click", async (event) => {
-        if (!lastState) {
-          return;
-        }
-        const rect = board.getBoundingClientRect();
-        const iso = buildIsoMetrics(lastState);
-        const sx = (event.clientX - rect.left) * (board.width / rect.width);
-        const sy = (event.clientY - rect.top) * (board.height / rect.height);
-        const world = unprojectIso(sx, sy, iso);
-        const x = Math.max(1, Math.min(lastState.w - 2, Math.floor(world.x)));
-        const y = Math.max(1, Math.min(lastState.h - 3, Math.floor(world.y)));
-        await sendAction({ action: "click_fire", x, y });
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+
+      board3d.addEventListener("click", async (event) => {
+        if (!lastState || !terrainPickPlane) return;
+
+        const rect = board3d.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const hit = raycaster.intersectObject(terrainPickPlane, false)[0];
+        if (!hit) return;
+
+        const grid = gridFromWorld(lastState, hit.point.x, hit.point.z);
+        await sendAction({ action: "click_fire", x: grid.x, y: grid.y });
         await tick();
       });
 
-      window.addEventListener("resize", () => {
-        if (lastState) {
-          draw(lastState);
-        }
-      });
+      window.addEventListener("resize", resizeRenderer);
 
       async function start() {
-        statusEl.textContent = "Loading art...";
-        await loadSprites();
+        statusEl.textContent = "Loading 3D scene...";
+        resizeRenderer();
+        await loadExplosionTextures();
+        animate();
         await tick();
         setInterval(tick, 50);
       }
 
       start().catch(() => {
-        statusEl.textContent = "Failed to load art";
+        statusEl.textContent = "Failed to load 3D scene";
       });
     </script>
   </body>

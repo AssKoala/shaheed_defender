@@ -167,24 +167,55 @@ def render_moon() -> Image.Image:
 def render_explosion(radius: int) -> Image.Image:
     image = _blank()
     draw = ImageDraw.Draw(image)
-    colors = {
-        1: "#fff2b0",
-        2: "#ffd166",
-        3: "#ffb347",
-        4: "#ff9248",
-        5: "#ff6b35",
+    center_x, center_y = 16, 16
+    max_r = {1: 4.0, 2: 6.0, 3: 8.0, 4: 10.0, 5: 12.0}[radius]
+
+    # Build a soft radial body with heat bands to make the explosion look fuller.
+    for y in range(BASE_SIZE):
+        for x in range(BASE_SIZE):
+            dx = x - center_x
+            dy = y - center_y
+            d = (dx * dx + dy * dy) ** 0.5
+            if d > max_r + 1.5:
+                continue
+
+            if d <= max_r * 0.32:
+                color = (255, 249, 212, 255)
+            elif d <= max_r * 0.56:
+                color = (255, 216, 125, 245)
+            elif d <= max_r * 0.82:
+                color = (255, 157, 72, 232)
+            elif d <= max_r:
+                color = (255, 102, 38, 210)
+            else:
+                fade = max(0, int(120 - (d - max_r) * 80))
+                color = (255, 82, 22, fade)
+
+            image.putpixel((x, y), color)
+
+    # Jagged shell and sparks for a PS2-era sprite-sheet punch.
+    shell_points = {
+        1: [(16, 10), (19, 11), (21, 13), (22, 16), (20, 19), (17, 21), (14, 21), (11, 19), (10, 16), (11, 13), (13, 11)],
+        2: [(16, 8), (20, 9), (23, 12), (24, 16), (23, 20), (20, 23), (16, 24), (12, 23), (9, 20), (8, 16), (9, 12), (12, 9)],
+        3: [(16, 7), (21, 8), (25, 11), (27, 16), (25, 21), (22, 24), (16, 26), (11, 24), (7, 21), (5, 16), (7, 11), (11, 8)],
+        4: [(16, 6), (22, 7), (27, 10), (29, 16), (27, 22), (23, 26), (16, 28), (10, 26), (5, 22), (3, 16), (5, 10), (10, 7)],
+        5: [(16, 5), (23, 6), (28, 9), (31, 16), (28, 23), (24, 28), (16, 30), (9, 28), (4, 23), (1, 16), (4, 9), (9, 6)],
     }
-    spikes = {
-        1: 3,
-        2: 5,
-        3: 7,
-        4: 9,
-        5: 11,
+    draw.polygon(shell_points[radius], outline="#ffd88a")
+
+    spark_sets = {
+        1: [(22, 14), (10, 18), (18, 23), (14, 9)],
+        2: [(24, 13), (8, 18), (20, 25), (13, 7), (25, 18)],
+        3: [(26, 12), (7, 20), (21, 27), (11, 6), (27, 19), (16, 5)],
+        4: [(28, 12), (6, 21), (23, 28), (10, 5), (29, 19), (16, 4), (4, 14)],
+        5: [(30, 11), (5, 22), (24, 30), (9, 4), (30, 20), (16, 3), (3, 14), (27, 6)],
     }
-    center = (16, 16)
-    r = spikes[radius]
-    draw.ellipse((center[0] - r, center[1] - r, center[0] + r, center[1] + r), fill=colors[radius])
-    draw.ellipse((center[0] - max(1, r // 2), center[1] - max(1, r // 2), center[0] + max(1, r // 2), center[1] + max(1, r // 2)), fill="#fff5cf")
+    for px, py in spark_sets[radius]:
+        if 0 <= px < BASE_SIZE and 0 <= py < BASE_SIZE:
+            draw.point((px, py), fill="#fff4cc")
+            if px + 1 < BASE_SIZE:
+                draw.point((px + 1, py), fill="#ffb85f")
+
     return _resize(image)
 
 

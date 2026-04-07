@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN python generate_pixel_sprites.py
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} web_service:app"]

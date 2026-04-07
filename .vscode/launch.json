@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Shaheed Defender Web",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/web_service.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Generate sprites"
+    },
+    {
+      "name": "Shaheed Defender Terminal",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/shaheed_defender.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Generate sprites"
+    }
+  ]
+}

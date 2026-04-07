@@ -3,6 +3,7 @@
 Browser-playable missile-defense game with an optional terminal mode.
 
 The browser version now renders with canvas-based pixel art using PNG sprite assets.
+Generated sprite PNGs are not checked in; they are created by Docker build, VS Code launch, or automatically on first web-service startup.
 
 ## Quick Start
 
@@ -82,6 +83,13 @@ python generate_pixel_sprites.py
 ```
 
 The generated files are written to `static/sprites/`.
+
+## VS Code Launch
+
+The included VS Code launch configurations regenerate sprites before starting either the web service or the terminal app.
+
+- [/.vscode/launch.json](.vscode/launch.json)
+- [/.vscode/tasks.json](.vscode/tasks.json)
 
 ## Run the Terminal Version (Optional)
 

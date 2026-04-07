@@ -1,0 +1,17 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Generate sprites",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "generate_pixel_sprites.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

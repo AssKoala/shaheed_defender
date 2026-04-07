@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shaheed Defender</title>
+    <style>
+      :root {
+        --bg: #050916;
+        --panel: #09122a;
+        --text: #c7e0ff;
+        --accent: #39c6ff;
+        --danger: #ff5c5c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(circle at 20% 0%, #111f45 0%, var(--bg) 45%);
+        color: var(--text);
+        font-family: "Consolas", "Courier New", monospace;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+      }
+
+      .frame {
+        width: min(100%, 1000px);
+        background: color-mix(in oklab, var(--panel), black 10%);
+        border: 1px solid #1a2d66;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .hud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid #17306d;
+        font-size: 14px;
+      }
+
+      .hud span strong {
+        color: var(--accent);
+      }
+
+      #board {
+        margin: 0;
+        padding: 14px;
+        line-height: 1;
+        font-size: clamp(7px, 1.5vw, 13px);
+        white-space: pre;
+        overflow: auto;
+        min-height: 360px;
+      }
+
+      .controls {
+        padding: 8px 14px 14px;
+        color: #9fb7df;
+        font-size: 13px;
+      }
+
+      .status {
+        color: #9cc8ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="frame">
+      <section class="hud">
+        <span>Score: <strong id="score">0</strong></span>
+        <span>Wave: <strong id="wave">1</strong></span>
+        <span>Cities: <strong id="cities">6/6</strong></span>
+        <span>Ammo: <strong id="ammo">30</strong></span>
+        <span class="status" id="status">Connecting...</span>
+      </section>
+      <pre id="board"></pre>
+      <section class="controls">
+        Controls: Arrow keys move | Space fires | Click to target/fire | R restarts after game over
+      </section>
+    </main>
+
+    <script>
+      const board = document.getElementById("board");
+      const statusEl = document.getElementById("status");
+      const scoreEl = document.getElementById("score");
+      const waveEl = document.getElementById("wave");
+      const citiesEl = document.getElementById("cities");
+      const ammoEl = document.getElementById("ammo");
+
+      let lastState = null;
+
+      function createGrid(w, h) {
+        return Array.from({ length: h }, () => Array.from({ length: w }, () => " "));
+      }
+
+      function put(grid, x, y, ch) {
+        if (y >= 0 && y < grid.length && x >= 0 && x < grid[0].length) {
+          grid[y][x] = ch;
+        }
+      }
+
+      function draw(state) {
+        const grid = createGrid(state.w, state.h).map((row, y) =>
+          Array.from({ length: state.w }, (_, x) => (y < state.h - 3 && ((x + y * 3) % 23 === 0) ? "." : " "))
+        );
+
+        for (let x = 0; x < state.w; x += 1) {
+          put(grid, x, state.h - 1, "_");
+        }
+
+        for (const city of state.cities) {
+          if (city.alive) {
+            put(grid, city.x - 1, state.h - 2, "#");
+            put(grid, city.x, state.h - 2, "#");
+            put(grid, city.x + 1, state.h - 2, "#");
+          } else {
+            put(grid, city.x, state.h - 2, "x");
+          }
+        }
+
+        put(grid, state.battery_x - 1, state.battery_y, "[");
+        put(grid, state.battery_x, state.battery_y, "^");
+        put(grid, state.battery_x + 1, state.battery_y, "]");
+
+        for (const exp of state.explosions) {
+          for (let dy = -exp.r; dy <= exp.r; dy += 1) {
+            for (let dx = -exp.r; dx <= exp.r; dx += 1) {
+              if (dx * dx + dy * dy <= exp.r * exp.r) {
+                put(grid, Math.round(exp.x + dx), Math.round(exp.y + dy), "*");
+              }
+            }
+          }
+        }
+
+        for (const d of state.drones) {
+          put(grid, Math.round(d.x), Math.round(d.y), "V");
+        }
+
+        for (const m of state.missiles) {
+          put(grid, Math.round(m.x), Math.round(m.y), "|");
+        }
+
+        put(grid, state.cursor.x, state.cursor.y, "+");
+
+        let out = grid.map((r) => r.join("")).join("\n");
+        if (state.game_over) {
+          out += "\n\nGAME OVER - Press R to restart";
+        }
+        board.textContent = out;
+
+        const alive = state.cities.filter((c) => c.alive).length;
+        scoreEl.textContent = String(state.score);
+        waveEl.textContent = String(state.wave);
+        citiesEl.textContent = `${alive}/6`;
+        ammoEl.textContent = String(state.ammo);
+      }
+
+      async function sendAction(payload) {
+        await fetch("/api/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      async function tick() {
+        try {
+          const resp = await fetch("/api/state", { cache: "no-store" });
+          if (!resp.ok) {
+            throw new Error("State request failed");
+          }
+          const state = await resp.json();
+          lastState = state;
+          draw(state);
+          statusEl.textContent = "Online";
+        } catch (err) {
+          statusEl.textContent = "Disconnected - retrying";
+        }
+      }
+
+      window.addEventListener("keydown", async (event) => {
+        if (!lastState) {
+          return;
+        }
+        if (event.key === "ArrowUp") await sendAction({ action: "move", dx: 0, dy: -1 });
+        else if (event.key === "ArrowDown") await sendAction({ action: "move", dx: 0, dy: 1 });
+        else if (event.key === "ArrowLeft") await sendAction({ action: "move", dx: -2, dy: 0 });
+        else if (event.key === "ArrowRight") await sendAction({ action: "move", dx: 2, dy: 0 });
+        else if (event.key === " ") await sendAction({ action: "fire" });
+        else if ((event.key === "r" || event.key === "R") && lastState.game_over) {
+          await fetch("/api/restart", { method: "POST" });
+        } else {
+          return;
+        }
+        event.preventDefault();
+        await tick();
+      });
+
+      board.addEventListener("click", async (event) => {
+        if (!lastState) {
+          return;
+        }
+        const rect = board.getBoundingClientRect();
+        const charW = rect.width / lastState.w;
+        const charH = rect.height / (lastState.h + (lastState.game_over ? 2 : 0));
+        const x = Math.max(1, Math.min(lastState.w - 2, Math.floor((event.clientX - rect.left) / charW)));
+        const y = Math.max(1, Math.min(lastState.h - 3, Math.floor((event.clientY - rect.top) / charH)));
+        await sendAction({ action: "click_fire", x, y });
+        await tick();
+      });
+
+      tick();
+      setInterval(tick, 50);
+    </script>
+  </body>
+</html>
